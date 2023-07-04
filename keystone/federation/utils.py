@@ -554,7 +554,7 @@ class RuleProcessor(object):
                 identity_values += rule['local']
             else:
                 for local in rule['local']:
-                    new_local = self._update_local_mapping(local, direct_maps)
+                    new_local = self._update_local_mapping(local, direct_maps)[0]
                     identity_values.append(new_local)
 
         LOG.debug('identity_values: %s', identity_values)
@@ -740,24 +740,42 @@ class RuleProcessor(object):
             remote match from a local section of a rule
 
         """
-        LOG.debug('direct_maps: %s', direct_maps)
-        LOG.debug('local: %s', local)
-        new = {}
-        for k, v in local.items():
-            if isinstance(v, dict):
-                new_value = self._update_local_mapping(v, direct_maps)
-            elif isinstance(v, list):
-                new_value = [self._update_local_mapping(item, direct_maps)
-                             for item in v]
-            else:
-                try:
+    LOG.debug('direct_maps: %s', direct_maps)
+    LOG.debug('local: %s', local)
+    #pdb.set_trace()
+    new = {}
+    more = False
+    for k, v in local.items():
+        if isinstance(v, dict):
+            new_value = _update_local_mapping(v, direct_maps)[0]
+        elif isinstance(v, list):
+            new_value = []
+            for item in v:
+                item_more = True
+                item_idx = 0
+                while item_more:
+                    (item_exp, item_more) = _update_local_mapping(item,
+                                                direct_maps, item_idx)
+                    new_value += [item_exp]
+                    item_idx += 1
+        else:
+            try:
+                # Check for direct_maps replcement fields, extracting first
+                rep_term = re.compile("{\d+}")
+                result = rep_term.search(v)
+                if result:
+                    rep_idx = int(result[0][1:-1])
+                if result and isinstance(direct_maps[rep_idx], list):
+                    new_value = direct_maps[rep_idx][expansion_idx]
+                    more = expansion_idx < len(direct_maps[rep_idx])-1
+                else:
                     new_value = v.format(*direct_maps)
-                except IndexError:
-                    raise exception.DirectMappingError(
-                        mapping_id=self.mapping_id)
 
-            new[k] = new_value
-        return new
+            except IndexError:
+                print("IndexError thrown")
+
+        new[k] = new_value
+    return (new, more)
 
     def _verify_all_requirements(self, requirements, assertion):
         """Compare remote requirements of a rule against the assertion.
