@@ -12,6 +12,7 @@
 
 import datetime
 from testtools import matchers
+import unittest
 import uuid
 
 import http.client
@@ -211,7 +212,6 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
             self.user_id, self.project_id, second_role['id'])
         with self.test_client() as c:
             pw_token = self.get_scoped_token()
-            # create a self-trust - only the roles are important for this test
             trust_ref = unit.new_trust_ref(
                 trustor_user_id=self.user_id,
                 trustee_user_id=self.user_id,
@@ -228,14 +228,26 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
             trust_token = self.v3_create_token(
                 trust_auth).headers['X-Subject-Token']
             app_cred = self._app_cred_body(roles=[{'id': self.role_id}])
-            # only the roles from the trust token should be allowed, even if
-            # the user has the role assigned on the project
-            c.post('/v3/users/%s/application_credentials' % self.user_id,
-                   headers={'X-Auth-Token': trust_token},
-                   json=app_cred,
-                   expected_status_code=http.client.BAD_REQUEST)
+            # Trust-scoped tokens are entirely blocked from managing
+            # application credentials (LP#2150089).
+            c.post(
+                f'/v3/users/{self.user_id}/application_credentials',
+                headers={'X-Auth-Token': trust_token},
+                json=app_cred,
+                expected_status_code=http.client.FORBIDDEN,
+            )
 
     def test_create_application_credential_allow_recursion(self):
+        """Unrestricted app credential token can create new credentials.
+
+        The `unrestricted` flag is a documented (unsafe) feature that allows
+        an application credential token to create additional application
+        credentials. This must continue to work -- restricted application
+        credentials are blocked by _check_unrestricted_application_credential,
+        but unrestricted ones are explicitly opted-in to this behaviour.
+        Trust-scoped and OAuth1 tokens are separately blocked by
+        _block_delegated_token_app_creds (LP#2150089).
+        """
         with self.test_client() as c:
             roles = [{'id': self.role_id}]
             app_cred_body_1 = self._app_cred_body(roles=roles)
@@ -554,6 +566,12 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
                      headers={'X-Auth-Token': token})
 
     def test_delete_application_credential_allow_recursion(self):
+        """Unrestricted app credential token can delete credentials.
+
+        The `unrestricted` flag allows an application credential token to
+        delete application credentials. Trust-scoped and OAuth1 tokens are
+        separately blocked by _block_delegated_token_app_creds (LP#2150089).
+        """
         with self.test_client() as c:
             roles = [{'id': self.role_id}]
             app_cred_body = self._app_cred_body(roles=roles)
@@ -598,8 +616,294 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
             # need to be rolled into the base MEMBER_PATH_FMT
             member_path = '/v3%s' % MEMBER_PATH_FMT % {
                 'user_id': self.user_id,
-                'app_cred_id': app_cred_id}
-            c.patch(member_path,
-                    json=app_cred_body,
-                    expected_status_code=http.client.METHOD_NOT_ALLOWED,
-                    headers={'X-Auth-Token': token})
+                'app_cred_id': app_cred_id,
+            }
+            c.patch(
+                member_path,
+                json=app_cred_body,
+                expected_status_code=http.client.METHOD_NOT_ALLOWED,
+                headers={'X-Auth-Token': token},
+            )
+
+    def _get_trust_token(self, c, pw_token):
+        """Return a trust-scoped token for self.user_id on self.project_id."""
+        trust_ref = unit.new_trust_ref(
+            trustor_user_id=self.user_id,
+            trustee_user_id=self.user_id,
+            project_id=self.project_id,
+            role_ids=[self.role_id],
+        )
+        resp = c.post(
+            '/v3/OS-TRUST/trusts',
+            headers={'X-Auth-Token': pw_token},
+            json={'trust': trust_ref},
+        )
+        trust_id = resp.json['trust']['id']
+        trust_auth = self.build_authentication_request(
+            user_id=self.user_id,
+            password=self.user['password'],
+            trust_id=trust_id,
+        )
+        return self.v3_create_token(trust_auth).headers['X-Subject-Token']
+
+    def test_delegation_guard_trust_list_app_creds(self):
+        """Trust-scoped token cannot list application credentials (LP#2150089).
+
+        Previously GET /v3/users/{id}/application_credentials had no delegation
+        guard at all; any trust-scoped token could enumerate the user's
+        application credentials.
+        """
+        with self.test_client() as c:
+            pw_token = self.get_scoped_token()
+            trust_token = self._get_trust_token(c, pw_token)
+            c.get(
+                f'/v3/users/{self.user_id}/application_credentials',
+                headers={'X-Auth-Token': trust_token},
+                expected_status_code=http.client.FORBIDDEN,
+            )
+
+    def test_delegation_guard_trust_get_app_cred(self):
+        """Trust-scoped token cannot read a specific application credential.
+
+        Previously GET /v3/users/{id}/application_credentials/{id} had no
+        delegation guard at all (LP#2150089).
+        """
+        with self.test_client() as c:
+            pw_token = self.get_scoped_token()
+            roles = [{'id': self.role_id}]
+            resp = c.post(
+                f'/v3/users/{self.user_id}/application_credentials',
+                json=self._app_cred_body(roles=roles),
+                expected_status_code=http.client.CREATED,
+                headers={'X-Auth-Token': pw_token},
+            )
+            app_cred_id = resp.json['application_credential']['id']
+            trust_token = self._get_trust_token(c, pw_token)
+            member_path = f'/v3{MEMBER_PATH_FMT}' % {
+                'user_id': self.user_id,
+                'app_cred_id': app_cred_id,
+            }
+            c.get(
+                member_path,
+                headers={'X-Auth-Token': trust_token},
+                expected_status_code=http.client.FORBIDDEN,
+            )
+
+    def test_delegation_guard_trust_delete_app_cred(self):
+        """Trust-scoped token cannot delete an application credential.
+
+        Previously DELETE /v3/users/{id}/application_credentials/{id} only
+        checked for restricted app-cred tokens; trust-scoped tokens had no
+        guard (LP#2150089).
+        """
+        with self.test_client() as c:
+            pw_token = self.get_scoped_token()
+            roles = [{'id': self.role_id}]
+            resp = c.post(
+                f'/v3/users/{self.user_id}/application_credentials',
+                json=self._app_cred_body(roles=roles),
+                expected_status_code=http.client.CREATED,
+                headers={'X-Auth-Token': pw_token},
+            )
+            app_cred_id = resp.json['application_credential']['id']
+            trust_token = self._get_trust_token(c, pw_token)
+            member_path = f'/v3{MEMBER_PATH_FMT}' % {
+                'user_id': self.user_id,
+                'app_cred_id': app_cred_id,
+            }
+            c.delete(
+                member_path,
+                headers={'X-Auth-Token': trust_token},
+                expected_status_code=http.client.FORBIDDEN,
+            )
+
+    def test_delegation_guard_trust_list_access_rules(self):
+        """Trust-scoped token cannot list access rules (LP#2150089)."""
+        access_rules = [
+            {'path': '/v3/projects', 'method': 'GET', 'service': 'identity'}
+        ]
+        with self.test_client() as c:
+            pw_token = self.get_scoped_token()
+            roles = [{'id': self.role_id}]
+            c.post(
+                f'/v3/users/{self.user_id}/application_credentials',
+                json=self._app_cred_body(
+                    roles=roles, access_rules=access_rules
+                ),
+                expected_status_code=http.client.CREATED,
+                headers={'X-Auth-Token': pw_token},
+            )
+            trust_token = self._get_trust_token(c, pw_token)
+            c.get(
+                f'/v3/users/{self.user_id}/access_rules',
+                headers={'X-Auth-Token': trust_token},
+                expected_status_code=http.client.FORBIDDEN,
+            )
+
+    def test_delegation_guard_trust_get_access_rule(self):
+        """Trust-scoped token cannot read a specific access rule (LP#2150089)."""
+        access_rules = [
+            {'path': '/v3/projects', 'method': 'GET', 'service': 'identity'}
+        ]
+        with self.test_client() as c:
+            pw_token = self.get_scoped_token()
+            roles = [{'id': self.role_id}]
+            resp = c.post(
+                f'/v3/users/{self.user_id}/application_credentials',
+                json=self._app_cred_body(
+                    roles=roles, access_rules=access_rules
+                ),
+                expected_status_code=http.client.CREATED,
+                headers={'X-Auth-Token': pw_token},
+            )
+            access_rule_id = resp.json['application_credential'][
+                'access_rules'
+            ][0]['id']
+            trust_token = self._get_trust_token(c, pw_token)
+            c.get(
+                f'/v3/users/{self.user_id}/access_rules/{access_rule_id}',
+                headers={'X-Auth-Token': trust_token},
+                expected_status_code=http.client.FORBIDDEN,
+            )
+
+    def test_delegation_guard_trust_delete_access_rule(self):
+        """Trust-scoped token cannot delete an access rule (LP#2150089)."""
+        access_rules = [
+            {'path': '/v3/projects', 'method': 'GET', 'service': 'identity'}
+        ]
+        with self.test_client() as c:
+            pw_token = self.get_scoped_token()
+            roles = [{'id': self.role_id}]
+            resp = c.post(
+                f'/v3/users/{self.user_id}/application_credentials',
+                json=self._app_cred_body(
+                    roles=roles, access_rules=access_rules
+                ),
+                expected_status_code=http.client.CREATED,
+                headers={'X-Auth-Token': pw_token},
+            )
+            ac = resp.json['application_credential']
+            access_rule_id = ac['access_rules'][0]['id']
+            c.delete(
+                f'/v3/users/{self.user_id}/application_credentials/{ac["id"]}',
+                headers={'X-Auth-Token': pw_token},
+                expected_status_code=http.client.NO_CONTENT,
+            )
+            trust_token = self._get_trust_token(c, pw_token)
+            c.delete(
+                f'/v3/users/{self.user_id}/access_rules/{access_rule_id}',
+                headers={'X-Auth-Token': trust_token},
+                expected_status_code=http.client.FORBIDDEN,
+            )
+
+    def test_list_access_rules(self):
+        access_rules: list[dict[str, str]] = [
+            {"service": "foo", "method": "GET", "path": "/bar"}
+        ]
+        with self.test_client() as c:
+            roles = [{'id': self.role_id}]
+            app_cred_body = self._app_cred_body(
+                roles=roles, access_rules=access_rules
+            )
+            token = self.get_scoped_token()
+            c.post(
+                f"/v3/users/{self.user_id}/application_credentials",
+                json=app_cred_body,
+                expected_status_code=http.client.CREATED,
+                headers={"X-Auth-Token": token},
+            )
+            # Invoke GET access_rules and trigger internal validation
+            r = c.get(
+                f"/v3/users/{self.user_id}/access_rules",
+                expected_status_code=http.client.OK,
+                headers={"X-Auth-Token": token},
+            )
+            ar = r.json["access_rules"]
+            self.assertEqual(access_rules[0]["method"], ar[0]["method"])
+
+    # TODO(stephenfin): This will pass once we increase strictness of the query
+    # string validation
+    @unittest.expectedFailure
+    def test_list_access_rules_invalid_qs(self):
+        with self.test_client() as c:
+            token = self.get_scoped_token()
+            # Invoke GET access_rules with unsupported query parameters and
+            # trigger internal validation
+            c.get(
+                f"/v3/users/{self.user_id}/access_rules?user_id=foo",
+                expected_status_code=http.client.BAD_REQUEST,
+                headers={"X-Auth-Token": token},
+            )
+
+    def test_show_access_rule(self):
+        access_rules: list[dict[str, str]] = [
+            {"service": "foo", "method": "GET", "path": "/bar"}
+        ]
+        with self.test_client() as c:
+            roles = [{'id': self.role_id}]
+            app_cred_body = self._app_cred_body(
+                roles=roles, access_rules=access_rules
+            )
+            token = self.get_scoped_token()
+            resp = c.post(
+                f"/v3/users/{self.user_id}/application_credentials",
+                json=app_cred_body,
+                expected_status_code=http.client.CREATED,
+                headers={"X-Auth-Token": token},
+            )
+            access_rule_id = resp.json["application_credential"][
+                "access_rules"
+            ][0]["id"]
+            # Invoke GET access_rules/{id} and trigger internal validation
+            c.get(
+                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}",
+                expected_status_code=http.client.OK,
+                headers={"X-Auth-Token": token},
+            )
+
+    # TODO(stephenfin): This will pass once we increase strictness of the query
+    # string validation
+    @unittest.expectedFailure
+    def test_show_access_rule_invalid_qs(self):
+        with self.test_client() as c:
+            token = self.get_scoped_token()
+            # Invoke GET access_rules/{id} with unsupported query parameters and
+            # trigger internal validation
+            c.get(
+                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}"
+                "?foo=bar",
+                expected_status_code=http.client.BAD_REQUEST,
+                headers={"X-Auth-Token": token},
+            )
+
+    def test_delete_access_rule(self):
+        access_rules: list[dict[str, str]] = [
+            {"service": "foo", "method": "GET", "path": "/bar"}
+        ]
+        with self.test_client() as c:
+            roles = [{'id': self.role_id}]
+            app_cred_body = self._app_cred_body(
+                roles=roles, access_rules=access_rules
+            )
+            token = self.get_scoped_token()
+            resp = c.post(
+                f"/v3/users/{self.user_id}/application_credentials",
+                json=app_cred_body,
+                expected_status_code=http.client.CREATED,
+                headers={"X-Auth-Token": token},
+            )
+            app_cred: dict = resp.json["application_credential"]
+            access_rule_id = app_cred["access_rules"][0]["id"]
+            c.delete(
+                f"/v3/users/{self.user_id}/application_credentials"
+                f"/{app_cred['id']}",
+                json=app_cred_body,
+                expected_status_code=http.client.NO_CONTENT,
+                headers={"X-Auth-Token": token},
+            )
+            # Invoke GET access_rules/{id} and trigger internal validation
+            c.delete(
+                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}",
+                expected_status_code=http.client.NO_CONTENT,
+                headers={"X-Auth-Token": token},
+            )
