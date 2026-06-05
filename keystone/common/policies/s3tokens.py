@@ -14,8 +14,9 @@ from oslo_policy import policy
 
 from keystone.common.policies import base
 
-# S3 tokens API requires service authentication to prevent presigned URL exploitation
-# This policy restricts access to service users or administrators only
+# S3 tokens API requires service authentication to prevent presigned URL
+# exploitation This policy restricts access to service users or administrators
+# only
 ADMIN_OR_SERVICE = 'rule:service_or_admin'
 
 s3tokens_policies = [

@@ -66,7 +66,8 @@ class S3ContribCore(test_v3.RestfulTestCase):
         self._test_good_response()
 
     def test_good_response_noauth(self):
-        # s3tokens now requires service/admin auth; unauthenticated should be denied
+        # s3tokens now requires service/admin auth; unauthenticated should be
+        # denied
         self._test_good_response(http.client.UNAUTHORIZED, noauth=True)
 
     def test_bad_request(self):
