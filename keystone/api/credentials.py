@@ -68,13 +68,13 @@ def _check_credential_project_scope(token, oslo_context, credential):
     cred_project_id = credential.get('project_id')
 
     if cred_project_id != token_project_id:
-        if CONF.security_compliance.allow_insecure_admin_trust_cross_project_credentials_access:
+        if CONF.security_compliance.allow_insecure_admin_trust_cross_project_credentials_access:  # noqa: E501
             # When insecure cross-project access is enabled, still restrict to
             # admin-role delegated tokens only. See LP#2150089.
             try:
                 ENFORCER.enforce_call(action='admin_required')
                 return
-            except Exception:
+            except Exception:  # nosec
                 pass
         raise exception.ForbiddenAction(
             action=_(

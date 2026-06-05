@@ -459,12 +459,12 @@ class AccessTokenCRUDTests(OAuthFlowTests):
         )
 
     def test_get_access_token_with_app_cred_blocked(self):
-        """Application credential token must not get a specific access token."""
+        """Application credential token must not get a specific access token."""  # noqa: E501
         self.test_oauth_flow()
         token = self._get_app_cred_token()
         access_token_key = self.access_token.key.decode()
         self.get(
-            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',
+            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',  # noqa: E501
             token=token,
             expected_status=http.client.FORBIDDEN,
         )
@@ -475,7 +475,7 @@ class AccessTokenCRUDTests(OAuthFlowTests):
         token = self._get_app_cred_token()
         access_token_key = self.access_token.key.decode()
         self.delete(
-            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',
+            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',  # noqa: E501
             token=token,
             expected_status=http.client.FORBIDDEN,
         )
@@ -506,7 +506,7 @@ class AccessTokenCRUDTests(OAuthFlowTests):
         trust_token = r.headers['X-Subject-Token']
         access_token_key = self.access_token.key.decode()
         self.get(
-            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',
+            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',  # noqa: E501
             token=trust_token,
             expected_status=http.client.FORBIDDEN,
         )
@@ -537,7 +537,7 @@ class AccessTokenCRUDTests(OAuthFlowTests):
         trust_token = r.headers['X-Subject-Token']
         access_token_key = self.access_token.key.decode()
         self.delete(
-            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',
+            f'/users/{self.user_id}/OS-OAUTH1/access_tokens/{access_token_key}',  # noqa: E501
             token=trust_token,
             expected_status=http.client.FORBIDDEN,
         )

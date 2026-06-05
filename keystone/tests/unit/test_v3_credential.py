@@ -751,7 +751,7 @@ class TestCredentialTrustScoped(CredentialBaseTestCase):
         )
 
     def test_trust_token_cannot_update_totp_credential(self):
-        """Trust-scoped token must not be able to update a TOTP credential blob."""
+        """Trust-scoped token must not be able to update a TOTP credential blob."""  # noqa: E501
         totp_ref = {
             'user_id': self.user_id,
             'type': 'totp',
@@ -834,7 +834,8 @@ class TestCredentialTrustScoped(CredentialBaseTestCase):
             expected_status=http.client.OK,
         )
         # The resulting token is scoped to the trust's project, not to
-        # other_project -- the trust mechanism prevents cross-project escalation.
+        # other_project -- the trust mechanism prevents cross-project
+        # escalation.
         token_project = r.result['token']['project']['id']
         self.assertEqual(self.project_id, token_project)
         self.assertNotEqual(other_project['id'], token_project)
@@ -1275,7 +1276,7 @@ class TestCredentialAccessToken(CredentialBaseTestCase):
         access_key, _ = self._get_access_token()
 
         # Retrieve the stored access token to get its project_id
-        access_token = PROVIDERS.oauth_api.get_access_token(
+        access_token = PROVIDERS.oauth_api.get_access_token(  # noqa F841
             access_key.decode('utf-8')
             if isinstance(access_key, bytes)
             else access_key
@@ -1442,7 +1443,7 @@ class TestCredentialEc2(CredentialBaseTestCase):
         return r.headers.get('X-Subject-Token')
 
     def test_ec2_create_credential_trust_cross_project_blocked(self):
-        """Trust-scoped token cannot create EC2 cred for a different project."""
+        """Trust-scoped token cannot create EC2 cred for a different project."""  # noqa: E501
         other_project = unit.new_project_ref(domain_id=self.domain_id)
         other_project = PROVIDERS.resource_api.create_project(
             other_project['id'], other_project
@@ -1469,7 +1470,7 @@ class TestCredentialEc2(CredentialBaseTestCase):
         self.assertEqual(self.project_id, r.result['credential']['tenant_id'])
 
     def test_ec2_get_credential_trust_cross_project_blocked(self):
-        """Trust-scoped token cannot get an EC2 cred from a different project."""
+        """Trust-scoped token cannot get an EC2 cred from a different project."""  # noqa: E501
         other_project = unit.new_project_ref(domain_id=self.domain_id)
         other_project = PROVIDERS.resource_api.create_project(
             other_project['id'], other_project
@@ -1493,7 +1494,7 @@ class TestCredentialEc2(CredentialBaseTestCase):
         self.get(uri, token=trust_token, expected_status=http.client.FORBIDDEN)
 
     def test_ec2_delete_credential_trust_cross_project_blocked(self):
-        """Trust-scoped token cannot delete EC2 cred from a different project."""
+        """Trust-scoped token cannot delete EC2 cred from a different project."""  # noqa: E501
         other_project = unit.new_project_ref(domain_id=self.domain_id)
         other_project = PROVIDERS.resource_api.create_project(
             other_project['id'], other_project
