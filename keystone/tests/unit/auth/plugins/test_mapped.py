@@ -210,7 +210,7 @@ class TestHandleScopedToken(unit.TestCase):
         bypass vulnerability: handle_scoped_token must include expires_at in
         the returned response_data so that issue_token() does not fall back to
         default_expire_time().
-        """
+        """  # noqa: E501
         original_expiry = '2026-04-26T08:59:30.000000Z'
         token = self._make_federated_token_mock(original_expiry)
 
@@ -244,7 +244,7 @@ class TestHandleScopedToken(unit.TestCase):
         mock_validate_groups,
         mock_notify,
     ):
-        """Rescoped federated token still returns all required federation data."""
+        """Rescoped federated token still returns all required federation data."""  # noqa: E501
         token = self._make_federated_token_mock('2026-04-26T08:59:30.000000Z')
 
         result = mapped.handle_scoped_token(

@@ -741,7 +741,7 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
             )
 
     def test_delegation_guard_trust_get_access_rule(self):
-        """Trust-scoped token cannot read a specific access rule (LP#2150089)."""
+        """Trust-scoped token cannot read a specific access rule (LP#2150089)."""  # noqa: E501
         access_rules = [
             {'path': '/v3/projects', 'method': 'GET', 'service': 'identity'}
         ]
@@ -867,10 +867,10 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
     def test_show_access_rule_invalid_qs(self):
         with self.test_client() as c:
             token = self.get_scoped_token()
-            # Invoke GET access_rules/{id} with unsupported query parameters and
-            # trigger internal validation
+            # Invoke GET access_rules/{id} with unsupported query parameters
+            # and trigger internal validation
             c.get(
-                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}"
+                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}"  # noqa: E501,F821
                 "?foo=bar",
                 expected_status_code=http.client.BAD_REQUEST,
                 headers={"X-Auth-Token": token},

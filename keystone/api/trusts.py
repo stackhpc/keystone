@@ -58,7 +58,7 @@ def _check_application_credential():
     expanding its effective scope beyond the single project it was issued for.
     This applies regardless of the 'unrestricted' flag.
     """
-    if CONF.security_compliance.allow_insecure_application_credential_trust_escalation:
+    if CONF.security_compliance.allow_insecure_application_credential_trust_escalation:  # noqa: E501
         return
     auth_context = flask.request.environ.get(
         authorization.AUTH_CONTEXT_ENV, {}
