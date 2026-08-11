@@ -1418,6 +1418,53 @@ class TestCredentialEc2(CredentialBaseTestCase):
                           PROVIDERS.credential_api.get_credential,
                           cred_from_credential_api[0]['id'])
 
+    def _get_app_cred_token(self, unrestricted=False):
+        """Create an application credential and return a token for it."""
+        ref = unit.new_application_credential_ref(roles=[{'id': self.role_id}])
+        del ref['id']
+        if unrestricted:
+            ref['unrestricted'] = True
+        r = self.post(
+            f'/users/{self.user_id}/application_credentials',
+            body={'application_credential': ref},
+        )
+        app_cred = r.result['application_credential']
+        auth_data = self.build_authentication_request(
+            app_cred_id=app_cred['id'], secret=app_cred['secret']
+        )
+        r = self.v3_create_token(auth_data)
+        return r.headers.get('X-Subject-Token')
+
+    def test_ec2_create_credential_with_restricted_app_cred(self):
+        """Test that a restricted app cred cannot create EC2 credentials.
+
+        A restricted application credential must not be allowed to create
+        EC2 credentials, as this would bypass the role restriction and
+        grant full user access to S3.
+        """
+        token_id = self._get_app_cred_token(unrestricted=False)
+        uri = self._get_ec2_cred_uri()
+        self.post(
+            uri,
+            body={'tenant_id': self.project_id},
+            token=token_id,
+            expected_status=http.client.FORBIDDEN,
+        )
+
+    def test_ec2_create_credential_with_unrestricted_app_cred(self):
+        """Test that an unrestricted app cred can create EC2 credentials."""
+        token_id = self._get_app_cred_token(unrestricted=True)
+        uri = self._get_ec2_cred_uri()
+        r = self.post(
+            uri,
+            body={'tenant_id': self.project_id},
+            token=token_id,
+            expected_status=http.client.CREATED,
+        )
+        ec2_cred = r.result['credential']
+        self.assertEqual(self.user_id, ec2_cred['user_id'])
+        self.assertEqual(self.project_id, ec2_cred['tenant_id'])
+
     def _get_trust_token(self):
         """Create a trust and return a trust-scoped token for the trustee."""
         trustee = unit.new_user_ref(domain_id=self.domain_id)
@@ -1443,7 +1490,7 @@ class TestCredentialEc2(CredentialBaseTestCase):
         return r.headers.get('X-Subject-Token')
 
     def test_ec2_create_credential_trust_cross_project_blocked(self):
-        """Trust-scoped token cannot create EC2 cred for a different project."""  # noqa: E501
+        """Trust-scoped token cannot create EC2 cred for a different project."""
         other_project = unit.new_project_ref(domain_id=self.domain_id)
         other_project = PROVIDERS.resource_api.create_project(
             other_project['id'], other_project
@@ -1470,7 +1517,7 @@ class TestCredentialEc2(CredentialBaseTestCase):
         self.assertEqual(self.project_id, r.result['credential']['tenant_id'])
 
     def test_ec2_get_credential_trust_cross_project_blocked(self):
-        """Trust-scoped token cannot get an EC2 cred from a different project."""  # noqa: E501
+        """Trust-scoped token cannot get an EC2 cred from a different project."""
         other_project = unit.new_project_ref(domain_id=self.domain_id)
         other_project = PROVIDERS.resource_api.create_project(
             other_project['id'], other_project
@@ -1494,7 +1541,7 @@ class TestCredentialEc2(CredentialBaseTestCase):
         self.get(uri, token=trust_token, expected_status=http.client.FORBIDDEN)
 
     def test_ec2_delete_credential_trust_cross_project_blocked(self):
-        """Trust-scoped token cannot delete EC2 cred from a different project."""  # noqa: E501
+        """Trust-scoped token cannot delete EC2 cred from a different project."""
         other_project = unit.new_project_ref(domain_id=self.domain_id)
         other_project = PROVIDERS.resource_api.create_project(
             other_project['id'], other_project

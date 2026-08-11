@@ -216,6 +216,9 @@ class CredentialResource(ks_flask.ResourceBase):
         if credential.get('type', '').lower() == 'ec2':
             _check_unrestricted_application_credential(token)
         validation.lazy_validate(schema.credential_create, credential)
+        token = self.auth_context['token']
+        if credential.get('type', '').lower() == 'ec2':
+            _check_unrestricted_application_credential(token)
         trust_id = getattr(self.oslo_context, 'trust_id', None)
         app_cred_id = getattr(token, 'application_credential_id', None)
         access_token_id = getattr(token, 'access_token_id', None)
