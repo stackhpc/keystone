@@ -17,8 +17,6 @@ mariadb-client [platform:debian]
 mysql-server [platform:dpkg !platform:debian]
 mariadb-server [platform:debian]
 postgresql-client [platform:dpkg]
-postgresql-server-dev-all [platform:dpkg]
-python-all-dev [platform:dpkg !platform:debian]
 python3-all-dev [platform:dpkg]
 
 cyrus-sasl-devel [platform:rpm]
