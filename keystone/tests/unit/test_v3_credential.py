@@ -718,7 +718,7 @@ class TestCredentialTrustScoped(CredentialBaseTestCase):
         TOTP credentials have no project anchor. Before this fix the
         project boundary check skipped null-project credentials, allowing a
         delegation token to enumerate and exfiltrate MFA secrets.
-        """  # noqa: E501
+        """
         totp_ref = {
             'user_id': self.user_id,
             'type': 'totp',
@@ -751,7 +751,7 @@ class TestCredentialTrustScoped(CredentialBaseTestCase):
         )
 
     def test_trust_token_cannot_update_totp_credential(self):
-        """Trust-scoped token must not be able to update a TOTP credential blob."""  # noqa: E501
+        """Trust-scoped token must not be able to update a TOTP credential blob."""
         totp_ref = {
             'user_id': self.user_id,
             'type': 'totp',
@@ -834,8 +834,7 @@ class TestCredentialTrustScoped(CredentialBaseTestCase):
             expected_status=http.client.OK,
         )
         # The resulting token is scoped to the trust's project, not to
-        # other_project -- the trust mechanism prevents cross-project
-        # escalation.
+        # other_project -- the trust mechanism prevents cross-project escalation.
         token_project = r.result['token']['project']['id']
         self.assertEqual(self.project_id, token_project)
         self.assertNotEqual(other_project['id'], token_project)
@@ -914,8 +913,7 @@ class TestCredentialAppCreds(CredentialBaseTestCase):
             '/credentials',
             body={'credential': ref},
             token=token_id,
-            expected_status=http.client.CONFLICT,
-        )
+            expected_status=http.client.CONFLICT)
 
     def _get_app_cred_token(self, unrestricted=False):
         """Create an application credential and return its token."""
@@ -1272,11 +1270,11 @@ class TestCredentialAccessToken(CredentialBaseTestCase):
         Auth-time check: if a cross-project EC2 credential backed by an OAuth1
         access token exists, POST /ec2tokens must reject it when the
         credential's project_id differs from the access token's project_id.
-        """  # noqa: E501
+        """
         access_key, _ = self._get_access_token()
 
         # Retrieve the stored access token to get its project_id
-        access_token = PROVIDERS.oauth_api.get_access_token(  # noqa F841
+        access_token = PROVIDERS.oauth_api.get_access_token(
             access_key.decode('utf-8')
             if isinstance(access_key, bytes)
             else access_key

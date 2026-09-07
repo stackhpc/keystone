@@ -776,7 +776,7 @@ class TestRBACEnforcerRest(_TestRBACEnforcerBase):
         overwrite the URL-path-sourced value used in %(user_id)s policy
         substitutions, bypassing ownership checks such as
         ADMIN_OR_SYSTEM_READER_OR_OWNER on /v3/users/{user_id}/... endpoints.
-        """  # noqa: E501
+        """
         real_arg_id = uuid.uuid4().hex
         injected_arg_id = uuid.uuid4().hex
         seen = {}

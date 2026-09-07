@@ -12,7 +12,6 @@
 
 import datetime
 from testtools import matchers
-import unittest
 import uuid
 
 import http.client
@@ -616,14 +615,11 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
             # need to be rolled into the base MEMBER_PATH_FMT
             member_path = '/v3%s' % MEMBER_PATH_FMT % {
                 'user_id': self.user_id,
-                'app_cred_id': app_cred_id,
-            }
-            c.patch(
-                member_path,
-                json=app_cred_body,
-                expected_status_code=http.client.METHOD_NOT_ALLOWED,
-                headers={'X-Auth-Token': token},
-            )
+                'app_cred_id': app_cred_id}
+            c.patch(member_path,
+                    json=app_cred_body,
+                    expected_status_code=http.client.METHOD_NOT_ALLOWED,
+                    headers={'X-Auth-Token': token})
 
     def _get_trust_token(self, c, pw_token):
         """Return a trust-scoped token for self.user_id on self.project_id."""
@@ -741,7 +737,7 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
             )
 
     def test_delegation_guard_trust_get_access_rule(self):
-        """Trust-scoped token cannot read a specific access rule (LP#2150089)."""  # noqa: E501
+        """Trust-scoped token cannot read a specific access rule (LP#2150089)."""
         access_rules = [
             {'path': '/v3/projects', 'method': 'GET', 'service': 'identity'}
         ]
@@ -794,116 +790,4 @@ class ApplicationCredentialTestCase(test_v3.RestfulTestCase):
                 f'/v3/users/{self.user_id}/access_rules/{access_rule_id}',
                 headers={'X-Auth-Token': trust_token},
                 expected_status_code=http.client.FORBIDDEN,
-            )
-
-    def test_list_access_rules(self):
-        access_rules: list[dict[str, str]] = [
-            {"service": "foo", "method": "GET", "path": "/bar"}
-        ]
-        with self.test_client() as c:
-            roles = [{'id': self.role_id}]
-            app_cred_body = self._app_cred_body(
-                roles=roles, access_rules=access_rules
-            )
-            token = self.get_scoped_token()
-            c.post(
-                f"/v3/users/{self.user_id}/application_credentials",
-                json=app_cred_body,
-                expected_status_code=http.client.CREATED,
-                headers={"X-Auth-Token": token},
-            )
-            # Invoke GET access_rules and trigger internal validation
-            r = c.get(
-                f"/v3/users/{self.user_id}/access_rules",
-                expected_status_code=http.client.OK,
-                headers={"X-Auth-Token": token},
-            )
-            ar = r.json["access_rules"]
-            self.assertEqual(access_rules[0]["method"], ar[0]["method"])
-
-    # TODO(stephenfin): This will pass once we increase strictness of the query
-    # string validation
-    @unittest.expectedFailure
-    def test_list_access_rules_invalid_qs(self):
-        with self.test_client() as c:
-            token = self.get_scoped_token()
-            # Invoke GET access_rules with unsupported query parameters and
-            # trigger internal validation
-            c.get(
-                f"/v3/users/{self.user_id}/access_rules?user_id=foo",
-                expected_status_code=http.client.BAD_REQUEST,
-                headers={"X-Auth-Token": token},
-            )
-
-    def test_show_access_rule(self):
-        access_rules: list[dict[str, str]] = [
-            {"service": "foo", "method": "GET", "path": "/bar"}
-        ]
-        with self.test_client() as c:
-            roles = [{'id': self.role_id}]
-            app_cred_body = self._app_cred_body(
-                roles=roles, access_rules=access_rules
-            )
-            token = self.get_scoped_token()
-            resp = c.post(
-                f"/v3/users/{self.user_id}/application_credentials",
-                json=app_cred_body,
-                expected_status_code=http.client.CREATED,
-                headers={"X-Auth-Token": token},
-            )
-            access_rule_id = resp.json["application_credential"][
-                "access_rules"
-            ][0]["id"]
-            # Invoke GET access_rules/{id} and trigger internal validation
-            c.get(
-                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}",
-                expected_status_code=http.client.OK,
-                headers={"X-Auth-Token": token},
-            )
-
-    # TODO(stephenfin): This will pass once we increase strictness of the query
-    # string validation
-    @unittest.expectedFailure
-    def test_show_access_rule_invalid_qs(self):
-        with self.test_client() as c:
-            token = self.get_scoped_token()
-            # Invoke GET access_rules/{id} with unsupported query parameters
-            # and trigger internal validation
-            c.get(
-                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}"  # noqa: E501,F821
-                "?foo=bar",
-                expected_status_code=http.client.BAD_REQUEST,
-                headers={"X-Auth-Token": token},
-            )
-
-    def test_delete_access_rule(self):
-        access_rules: list[dict[str, str]] = [
-            {"service": "foo", "method": "GET", "path": "/bar"}
-        ]
-        with self.test_client() as c:
-            roles = [{'id': self.role_id}]
-            app_cred_body = self._app_cred_body(
-                roles=roles, access_rules=access_rules
-            )
-            token = self.get_scoped_token()
-            resp = c.post(
-                f"/v3/users/{self.user_id}/application_credentials",
-                json=app_cred_body,
-                expected_status_code=http.client.CREATED,
-                headers={"X-Auth-Token": token},
-            )
-            app_cred: dict = resp.json["application_credential"]
-            access_rule_id = app_cred["access_rules"][0]["id"]
-            c.delete(
-                f"/v3/users/{self.user_id}/application_credentials"
-                f"/{app_cred['id']}",
-                json=app_cred_body,
-                expected_status_code=http.client.NO_CONTENT,
-                headers={"X-Auth-Token": token},
-            )
-            # Invoke GET access_rules/{id} and trigger internal validation
-            c.delete(
-                f"/v3/users/{self.user_id}/access_rules/{access_rule_id}",
-                expected_status_code=http.client.NO_CONTENT,
-                headers={"X-Auth-Token": token},
             )

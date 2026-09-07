@@ -495,7 +495,8 @@ class UserOSEC2CredentialsResourceGetDelete(_UserOSEC2CredBaseResource):
         cred = PROVIDERS.credential_api.get_credential(credential_id)
         if not cred or cred['type'] != CRED_TYPE_EC2:
             raise ks_exception.Unauthorized(
-                message=_('EC2 access key not found.'))
+                message=_('EC2 access key not found.')
+            )
         return cred
 
     def get(self, user_id, credential_id):

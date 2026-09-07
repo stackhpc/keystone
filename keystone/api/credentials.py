@@ -68,13 +68,13 @@ def _check_credential_project_scope(token, oslo_context, credential):
     cred_project_id = credential.get('project_id')
 
     if cred_project_id != token_project_id:
-        if CONF.security_compliance.allow_insecure_admin_trust_cross_project_credentials_access:  # noqa: E501
+        if CONF.security_compliance.allow_insecure_admin_trust_cross_project_credentials_access:  # noqa
             # When insecure cross-project access is enabled, still restrict to
             # admin-role delegated tokens only. See LP#2150089.
             try:
                 ENFORCER.enforce_call(action='admin_required')
                 return
-            except Exception:  # nosec
+            except exception.ForbiddenAction:
                 pass
         raise exception.ForbiddenAction(
             action=_(
@@ -212,9 +212,6 @@ class CredentialResource(ks_flask.ResourceBase):
         ENFORCER.enforce_call(
             action='identity:create_credential', target_attr=target
         )
-        token = self.auth_context['token']
-        if credential.get('type', '').lower() == 'ec2':
-            _check_unrestricted_application_credential(token)
         validation.lazy_validate(schema.credential_create, credential)
         token = self.auth_context['token']
         if credential.get('type', '').lower() == 'ec2':
@@ -223,19 +220,6 @@ class CredentialResource(ks_flask.ResourceBase):
         app_cred_id = getattr(token, 'application_credential_id', None)
         access_token_id = getattr(token, 'access_token_id', None)
         _check_credential_project_scope(token, self.oslo_context, credential)
-        if (
-            app_cred_id is not None
-            and credential.get('type', '').lower() == 'ec2'
-        ):
-            ac_api = PROVIDERS.application_credential_api
-            app_cred = ac_api.get_application_credential(app_cred_id)
-            if credential.get('project_id') != app_cred['project_id']:
-                action = _(
-                    'EC2 credential project_id must match the '
-                    'project of the application credential used '
-                    'to authenticate'
-                )
-                raise exception.ForbiddenAction(action=action)
         ref = self._assign_unique_id(
             self._normalize_dict(credential),
             trust_id=trust_id, app_cred_id=app_cred_id,
@@ -267,6 +251,7 @@ class CredentialResource(ks_flask.ResourceBase):
         _check_credential_project_scope(
             self.auth_context['token'], self.oslo_context, current
         )
+
         credential = self.request_body_json.get('credential', {})
         validation.lazy_validate(schema.credential_update, credential)
         self._validate_blob_update_keys(current.copy(), credential.copy())
